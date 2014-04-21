@@ -15,6 +15,19 @@ sub get {
     return $SCHEMA->{$handle}
 }
 
+sub print {
+    my ($class) = @_;
+
+    for my $handle (keys %$SCHEMA) {
+        my $pair = $SCHEMA->{$handle};
+        for my $database (keys %$pair) {
+            print "$handle -> $database\n";
+            my $queries = $pair->{$database};
+            print("\t", $_ =~ s/\s+/ /gr, "\n") for @$queries;
+        }
+    }
+}
+
 1;
 __END__
 
