@@ -5,7 +5,7 @@ use Alpaca::QueryLogger;
 
 use Test::More;
 use Test::Deep;
-use Test::Pretty;
+use Test::Deep::Matcher;
 
 use Guard 'guard';
 use Module::Load;
@@ -16,6 +16,7 @@ use DBIx::Handler;
 sub import {
     Test::More->export_to_level(1, @_);
     Test::Deep->export_to_level(1, @_);
+    Test::Deep::Matcher->export_to_level(1, @_);
     sane->import;
 
     my $pkg = (caller)[0];
