@@ -158,7 +158,7 @@ sub test_is_deeply {
         if (my $e = $@) {
             fail "Exception: " . explain($e);
         } else {
-            is_deeply($retval, $expect) or do {
+            is_deeply($retval, $expect, $testname) or do {
                 note 'Expected: ' => explain $expect;
                 note 'Got: '      => explain $retval;
             };
@@ -175,7 +175,7 @@ sub test_cmp_deeply {
         if (my $e = $@) {
             fail "Exception: " . explain($e);
         } else {
-            cmp_deeply($retval, $expect) or do {
+            cmp_deeply($retval, $expect, $testname) or do {
                 note 'Expected: ' => explain $expect;
                 note 'Got: '      => explain $retval;
             };
