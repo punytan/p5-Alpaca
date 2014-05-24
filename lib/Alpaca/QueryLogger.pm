@@ -2,7 +2,7 @@ package Alpaca::QueryLogger;
 use sane;
 use DBIx::QueryLog;
 use Text::ASCIITable;
-use Term::ANSIColor qw(colored);
+use Term::ANSIColor 'colored';
 
 sub import {
     DBIx::QueryLog->import;
@@ -41,10 +41,17 @@ sub log    {
     if (my $explain = $args{params}->{explain}) {
         my @keys = qw/ id select_type table type possible_keys key key_len ref rows Extra /;
 
-        my $t = Text::ASCIITable->new;
+        my $t = Text::ASCIITable->new({ allowANSI => 1 });
         $t->setCols(@keys);
+
         for my $e (@$explain) {
-            $t->addRow(map { defined($e->{$_}) ? $e->{$_} : 'NULL' } @keys);
+            my $type = length $e->{type} ? $e->{type} : 'NULL';
+            my $color = (grep { $type eq $_ } qw/ const eq_ref ref range /)
+                ? ['bold', 'green']
+                : ['bold', 'yellow'];
+
+            $e->{type} = colored $color, $type;
+            $t->addRow(map { length $e->{$_} ? $e->{$_} : 'NULL' } @keys);
         }
 
         $class->printer($t, { indent => 1 });
