@@ -1,5 +1,6 @@
 use sane;
 use Test::Alpaca;
+use lib 't/lib';
 use MyApp::Service::User;
 use MyApp::Service::Types;
 
