@@ -7,7 +7,7 @@ sub add {
     my ($database, $sql) = %$pair;
 
     $SCHEMA->{$handle}{$database} ||= [];
-    push $SCHEMA->{$handle}{$database}, $sql;
+    push @{$SCHEMA->{$handle}{$database}}, $sql;
 }
 
 sub get {
