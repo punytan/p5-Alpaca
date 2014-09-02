@@ -2,6 +2,7 @@ package Test::Alpaca;
 use sane;
 use Alpaca::Config;
 use Alpaca::QueryLogger;
+use Alpaca::Exception;
 
 use Test::More;
 use Test::Deep;
@@ -10,8 +11,9 @@ use Test::Deep::Matcher;
 use Guard 'guard';
 use Module::Load;
 
-use Test::mysqld;
 use DBIx::Handler;
+
+$ENV{DOCKER_HOST} ||= 'tcp://192.168.59.103:2375';
 
 sub import {
     Test::More->export_to_level(1, @_);
@@ -47,6 +49,7 @@ sub setup {
 
 sub launch_mysqld {
     my ($class, $args) = @_;
+
     my $schema_class = ref $args->{schema_class} eq 'ARRAY'
         ? $args->{schema_class}
         : [ $args->{schema_class} ];
@@ -54,45 +57,50 @@ sub launch_mysqld {
     Module::Load::load $_ for @$schema_class;
 
     note "Launch mysqld...";
-    my $mysqld = Test::mysqld->new(
-        my_cnf => {
-            'skip-networking' => '', # no TCP socket
-        }
-    ) or plan skip_all => $Test::mysqld::errstr;
+
+    require Test::Docker::MySQL;
+    my $mysqld = Test::Docker::MySQL->new;
+    my $port = $mysqld->get_port;
 
     my %configs = Alpaca::Config->configs;
     for my $label (keys %configs) {
         next unless $label =~ /^DB_/;
 
-        my $attr = ref $configs{$label} eq 'ARRAY'
-            ? $configs{$label}->[0]{attr}
-            : $configs{$label}->{attr};
-
-        my $params = {
-            dsn  => $mysqld->dsn,
-            user => undef,
-            pass => undef,
-            attr => $attr,
-        };
-
-        Alpaca::Config->add($label => $params);
-
         for my $schema_class (@$schema_class) {
-            if (my $schema = $schema_class->get($label)) {
-                for my $table (keys %$schema) {
-                    my $handler = DBIx::Handler->new(
-                        $mysqld->dsn(dbname => $table), undef, undef, {
-                            RaiseError => 1,
-                            AutoCommit => 0,
-                        }
-                    );
+            my $schema = $schema_class->get($label) || {};
 
-                    my $queries = $schema->{$table};
-                    $handler->dbh->do($_ =~ s/\s+/ /gr) for @$queries;
+            my $dsn  = "dbi:mysql:database=mysql;host=127.0.0.1;port=$port";
+            my $handler = DBIx::Handler->new(
+                $dsn, 'root', undef, {
+                    RaiseError => 1,
+                    AutoCommit => 0,
                 }
+            );
+
+            my $attr = ref $configs{$label} eq 'ARRAY'
+                ? $configs{$label}->[0]{attr}
+                : $configs{$label}->{attr};
+
+            my $params = {
+                dsn  => "dbi:mysql:database=test;host=127.0.0.1;port=$port",
+                user => 'root',
+                pass => undef,
+                attr => $attr,
+            };
+
+            Alpaca::Config->add($label => $params);
+
+            for my $dbname (keys %$schema) {
+                $handler->dbh->do("CREATE DATABASE IF NOT EXISTS $dbname");
+                $handler->dbh->do("USE test");
+
+                my $queries = $schema->{$dbname};
+                $handler->dbh->do($_ =~ s/\s+/ /gr) for @$queries;
+
             }
         }
     }
+
     note "Launched mysqld";
 
     return guard {
@@ -114,14 +122,12 @@ sub init_database {
     for my $label (keys %dataset) {
         for my $table (keys %{$dataset{$label}}) {
             my $values = $dataset{$label}->{$table};
-            my $config = Alpaca::Config->resolve($label);
 
-            my $handler = DBIx::Handler->new(
-                $config->{dsn}, undef, undef, {
-                    RaiseError => 1,
-                    AutoCommit => 0,
-                }
-            );
+            my $config = Alpaca::Config->resolve($label)
+                or Alpaca::Exception->throw("No such label: $label");
+
+            note explain $config;
+            my $handler = DBIx::Handler->new(@$config{qw/ dsn user pass attr /});
 
             $handler->txn(sub {
                 my $dbh = shift;
@@ -134,13 +140,10 @@ sub init_database {
     return guard {
         note "Clean up database";
         for my $label (keys %dataset) {
-            my $config  = Alpaca::Config->resolve($label);
-            my $handler = DBIx::Handler->new(
-                $config->{dsn}, undef, undef, {
-                    RaiseError => 1,
-                    AutoCommit => 0,
-                }
-            );
+            my $config = Alpaca::Config->resolve($label)
+                or Alpaca::Exception->throw("No such label: $label");
+
+            my $handler = DBIx::Handler->new(@$config{qw/ dsn user pass attr /});
 
             my $rows = $handler->dbh->selectall_arrayref('SHOW TABLES');
             my @tables = map { @$_ } @$rows;

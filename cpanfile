@@ -15,7 +15,7 @@ requires 'Test::More';
 requires 'Test::Deep';
 requires 'Test::Deep::Matcher';
 requires 'Module::Load';
-requires 'Test::mysqld';
+requires 'Test::Docker::MySQL';
 
 requires 'Data::Validator';
 requires 'MouseX::Types::Mouse';
