@@ -126,7 +126,6 @@ sub init_database {
             my $config = Alpaca::Config->resolve($label)
                 or Alpaca::Exception->throw("No such label: $label");
 
-            note explain $config;
             my $handler = DBIx::Handler->new(@$config{qw/ dsn user pass attr /});
 
             $handler->txn(sub {
